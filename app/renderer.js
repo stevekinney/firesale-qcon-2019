@@ -1,5 +1,5 @@
 const path = require('path');
-const { remote, ipcRenderer } = require('electron');
+const { remote, ipcRenderer, shell } = require('electron');
 const mainProcess = remote.require('./main');
 
 const marked = require('marked');
@@ -41,6 +41,9 @@ const updateUserInterface = (isEdited = false) => {
 
   saveMarkdownButton.disabled = !isEdited;
   revertButton.disabled = !isEdited;
+
+  showFileButton.disabled = !filePath;
+  openInDefaultButton.disabled = !filePath;
 };
 
 markdownView.addEventListener('keyup', event => {
@@ -59,6 +62,10 @@ saveMarkdownButton.addEventListener('click', () => {
   mainProcess.saveMarkdown(filePath, markdownView.value);
 });
 
+saveHtmlButton.addEventListener('click', () => {
+  mainProcess.saveHtml(htmlView.innerHTML);
+});
+
 ipcRenderer.on('file-opened', (event, file, content) => {
   filePath = file;
   originalContent = content;
@@ -68,3 +75,52 @@ ipcRenderer.on('file-opened', (event, file, content) => {
 
   updateUserInterface();
 });
+
+document.addEventListener('dragover', (event) => { event.preventDefault(); });
+
+const getDraggedFile = (event) => event.dataTransfer.items[0];
+const getDroppedFile = (event) => event.dataTransfer.files[0];
+const fileTypeIsSupported = (file) => {
+  return ['text/plain', 'text/markdown'].includes(file.type);
+};
+
+markdownView.addEventListener('dragover', (event) => {
+  const file = getDraggedFile(event);
+
+  if (fileTypeIsSupported(file)) {
+    markdownView.classList.add('drag-over');
+  } else {
+    markdownView.classList.add('drag-error');
+  }
+});
+
+markdownView.addEventListener('drop', (event) => {
+  const file = getDroppedFile(event);
+
+  if (fileTypeIsSupported(file)) {
+    mainProcess.openFile(file.path);
+  } else {
+    alert('This file type is not supported!');
+  }
+
+  markdownView.classList.remove('drag-over');
+  markdownView.classList.remove('drag-error');
+});
+
+markdownView.addEventListener('dragleave', () => {
+  markdownView.classList.remove('drag-over');
+  markdownView.classList.remove('drag-error');
+});
+
+const showFile = () => {
+  if (!filePath) return;
+  shell.showItemInFolder(filePath);
+};
+
+const openInDefaultApplication = () => {
+  if (!filePath) return;
+  shell.openItem(filePath);
+};
+
+showFileButton.addEventListener('click', showFile);
+openInDefaultButton.addEventListener('click', openInDefaultApplication);
